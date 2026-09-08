@@ -1,19 +1,82 @@
-import { Injectable, Inject, PLATFORM_ID, OnDestroy } from '@angular/core';
+import { Injectable, Inject, InjectionToken, PLATFORM_ID, OnDestroy } from '@angular/core';
 import { isPlatformBrowser } from '@angular/common';
 import { Observable, Subject } from 'rxjs';
-import { PROCTORING_CONFIG, ProctoringConfig } from './procto.config';
-import {
-  FaceVerificationResult,
-  IdentityVerificationResult,
-  ProctoringFlag,
-  ProctoringFlagType,
-  ProctoringSeverity
-} from './procto.types';
 
+// =============================================================================
+// Types
+// =============================================================================
+
+export type ProctoringFlagType =
+  | 'no_face_detected'
+  | 'additional_person_detected'
+  | 'unauthorized_object'
+  | 'tab_switched'
+  | 'window_lost_focus'
+  | 'identity_mismatch'
+  | 'camera_error';
+
+export type ProctoringSeverity = 'low' | 'medium' | 'high';
+
+export interface ProctoringFlag {
+  candidateId: string;
+  examId: string;
+  flagType: ProctoringFlagType;
+  severity: ProctoringSeverity;
+  timestamp: string;
+  snapshot: string | null;
+}
+
+export interface FaceVerificationResult {
+  isMatch: boolean;
+  distance: number;
+  snapshot: string | null;
+}
+
+export interface IdentityVerificationResult extends FaceVerificationResult {
+  governmentIdSnapshot: string | null;
+}
+
+// =============================================================================
+// Config
+// =============================================================================
+
+export interface ProctoringConfig {
+  modelUrl: string;
+  watchedItems: string[];
+  objectDetectionMinScore: number;
+  personCountMinScore: number;
+  faceCheckIntervalMs: number;
+  objectCheckIntervalMs: number;
+  consecutiveMissesBeforeFlag: number;
+  faceMatchDistanceThreshold: number;
+  defaultIdentityCheckIntervalMs: number;
+  snapshotQuality: number;
+}
+
+export const DEFAULT_PROCTORING_CONFIG: ProctoringConfig = {
+  modelUrl: '/models/face-api',
+  watchedItems: ['cell phone', 'book', 'laptop', 'tvmonitor'],
+  objectDetectionMinScore: 0.3,
+  personCountMinScore: 0.6,
+  faceCheckIntervalMs: 1000,
+  objectCheckIntervalMs: 5000,
+  consecutiveMissesBeforeFlag: 3,
+  faceMatchDistanceThreshold: 0.6,
+  defaultIdentityCheckIntervalMs: 5 * 60 * 1000,
+  snapshotQuality: 0.6
+};
+
+export const PROCTORING_CONFIG = new InjectionToken<ProctoringConfig>('PROCTORING_CONFIG', {
+  providedIn: 'root',
+  factory: () => DEFAULT_PROCTORING_CONFIG
+});
+
+// =============================================================================
+// Service
+// =============================================================================
 
 type FaceApiModule = any;
 type CocoSsdModule = any;
-
 
 @Injectable({ providedIn: 'root' })
 export class ProctoringService implements OnDestroy {
@@ -29,7 +92,7 @@ export class ProctoringService implements OnDestroy {
   private readonly snapshotCtx: CanvasRenderingContext2D | null;
 
   private isRunning = false;
-  private sessionToken = 0; 
+  private sessionToken = 0;
 
   private consecutiveNoFaceCount = 0;
 
@@ -42,7 +105,6 @@ export class ProctoringService implements OnDestroy {
   public examId = 'unknown-exam';
 
   private readonly flagsSubject = new Subject<ProctoringFlag>();
-
   readonly flags$: Observable<ProctoringFlag> = this.flagsSubject.asObservable();
 
   private readonly faceStatusSubject = new Subject<'face_detected' | 'no_face_detected'>();
@@ -51,12 +113,10 @@ export class ProctoringService implements OnDestroy {
   private readonly visibilityHandler = () => {
     if (document.hidden) {
       this.emitFlag('tab_switched', 'medium');
-      console.warn('🚨 [PROCTOR FLAG] tab switched (medium)');
     }
   };
   private readonly blurHandler = () => {
     this.emitFlag('window_lost_focus', 'medium');
-    console.warn('🚨 [PROCTOR FLAG] window lost focus (medium)');
   };
 
   constructor(
@@ -72,7 +132,6 @@ export class ProctoringService implements OnDestroy {
     }
   }
 
-
   async initialize(): Promise<boolean> {
     if (!isPlatformBrowser(this.platformId)) {
       console.log('Proctoring skipped during SSR');
@@ -80,7 +139,7 @@ export class ProctoringService implements OnDestroy {
     }
 
     if (this.faceapi && this.cocoSsd && this.objectModel) {
-      return true; 
+      return true;
     }
 
     try {
@@ -107,7 +166,6 @@ export class ProctoringService implements OnDestroy {
       throw new Error('AI modules not initialized.');
     }
 
-    
     await this.withRetry(() =>
       Promise.all([
         this.faceapi.nets.tinyFaceDetector.loadFromUri(this.config.modelUrl),
@@ -137,6 +195,28 @@ export class ProctoringService implements OnDestroy {
   async startCamera(videoElement: HTMLVideoElement): Promise<boolean> {
     if (!isPlatformBrowser(this.platformId)) return false;
 
+    if (!window.isSecureContext) {
+      console.error(
+        'Camera access requires a secure context (HTTPS, or http://localhost). ' +
+        `Current origin: ${window.location.origin}. getUserMedia is unavailable on plain ` +
+        'HTTP for any host other than localhost/127.0.0.1 — this is a browser-enforced ' +
+        'restriction, not something fixable in code.'
+      );
+      this.emitFlag('camera_error', 'high');
+      return false;
+    }
+
+    if (!navigator.mediaDevices?.getUserMedia) {
+      console.error(
+        'navigator.mediaDevices.getUserMedia is not available in this browser/context. ' +
+        'This usually means: (a) an insecure context (see above), (b) a very old browser, ' +
+        'or (c) the page is embedded in an iframe whose "allow" attribute does not include ' +
+        '"camera", or whose parent site sends a Permissions-Policy header blocking camera access.'
+      );
+      this.emitFlag('camera_error', 'high');
+      return false;
+    }
+
     try {
       this.video = videoElement;
       this.stream = await navigator.mediaDevices.getUserMedia({
@@ -148,12 +228,23 @@ export class ProctoringService implements OnDestroy {
       await this.video.play();
       return true;
     } catch (error) {
-      console.error('Unable to access camera:', error);
+      const name = (error as DOMException)?.name;
+      const reasons: Record<string, string> = {
+        NotAllowedError: 'Permission was denied (by the user, or by a previous block that needs to be reset in browser site settings).',
+        NotFoundError: 'No camera device was found on this machine.',
+        NotReadableError: 'The camera is already in use by another application or browser tab.',
+        OverconstrainedError: 'No camera satisfies the requested constraints (resolution/facingMode).',
+        SecurityError: 'Blocked by a security policy (insecure context or Permissions-Policy).',
+        AbortError: 'Camera access was aborted, possibly due to a hardware or OS-level issue.'
+      };
+      console.error(
+        `Unable to access camera [${name ?? 'UnknownError'}]: ${reasons[name ?? ''] ?? 'Unrecognized error.'}`,
+        error
+      );
       this.emitFlag('camera_error', 'high');
       return false;
     }
   }
-
 
   startDetection(): void {
     if (!isPlatformBrowser(this.platformId) || !this.faceapi || !this.video || this.isRunning) {
@@ -167,10 +258,9 @@ export class ProctoringService implements OnDestroy {
     this.scheduleLoop(token, () => this.detectObjects(token), this.config.objectCheckIntervalMs);
   }
 
-  
   private scheduleLoop(token: number, work: () => Promise<void>, delayMs: number): void {
     const tick = async () => {
-      if (token !== this.sessionToken) return; // torn down mid-flight
+      if (token !== this.sessionToken) return;
       await work();
       if (token !== this.sessionToken) return;
       setTimeout(tick, delayMs);
@@ -183,7 +273,7 @@ export class ProctoringService implements OnDestroy {
 
     try {
       const detections = await this.faceapi.detectAllFaces(this.video, this.faceMatcherOptions);
-      if (token !== this.sessionToken) return; // stale by the time inference finished
+      if (token !== this.sessionToken) return;
 
       if (detections.length === 0) {
         this.consecutiveNoFaceCount++;
@@ -191,16 +281,13 @@ export class ProctoringService implements OnDestroy {
 
         if (this.consecutiveNoFaceCount >= this.config.consecutiveMissesBeforeFlag) {
           this.emitFlag('no_face_detected', 'medium');
-          console.warn('🚨 [PROCTOR FLAG] no face detected (medium)');
         }
       } else {
         this.consecutiveNoFaceCount = 0;
         this.faceStatusSubject.next('face_detected');
-        console.log('Face detected, distance:', detections[0].score);
 
         if (detections.length > 1) {
           this.emitFlag('additional_person_detected', 'high');
-            console.warn('🚨 [PROCTOR FLAG] additional person detected (high)');
         }
       }
     } catch (error) {
@@ -222,7 +309,6 @@ export class ProctoringService implements OnDestroy {
       const suspicious = predictions.filter((pr: any) => this.config.watchedItems.includes(pr.class));
       if (suspicious.length > 0) {
         this.emitFlag('unauthorized_object', 'high');
-        console.warn('🚨 [PROCTOR FLAG] unauthorized object detected (high):', suspicious.map((p: any) => p.class).join(', '));
       }
 
       const people = predictions.filter(
@@ -230,13 +316,11 @@ export class ProctoringService implements OnDestroy {
       );
       if (people.length > 1) {
         this.emitFlag('additional_person_detected', 'high');
-        console.warn('🚨 [PROCTOR FLAG] additional person detected (high)');
       }
     } catch (error) {
       console.error('Object detection error:', error);
     }
   }
-
 
   async setRegistrationPhoto(file: File): Promise<boolean> {
     if (!isPlatformBrowser(this.platformId) || !this.faceapi) return false;
@@ -281,9 +365,8 @@ export class ProctoringService implements OnDestroy {
     if (!snapshot) return null;
 
     try {
-      
       const liveDescriptor = await this.faceapi.computeFaceDescriptor(this.snapshotCanvas);
-      if (!liveDescriptor) return null; // no face in current frame
+      if (!liveDescriptor) return null;
 
       const distance = this.faceapi.euclideanDistance(this.registrationDescriptor, liveDescriptor);
       const isMatch = distance < this.config.faceMatchDistanceThreshold;
@@ -299,7 +382,6 @@ export class ProctoringService implements OnDestroy {
     }
   }
 
-  
   async verifyIdentity(
     registrationPhotoImg: HTMLImageElement,
     loginPhotoImg: HTMLImageElement,
@@ -353,7 +435,6 @@ export class ProctoringService implements OnDestroy {
     }
   }
 
- 
   public captureSnapshot(): string | null {
     if (!this.video || !this.snapshotCanvas || !this.snapshotCtx) return null;
     if (this.video.videoWidth === 0 || this.video.videoHeight === 0) return null;
@@ -390,7 +471,6 @@ export class ProctoringService implements OnDestroy {
     window.removeEventListener('blur', this.blurHandler);
   }
 
-
   getStream(): MediaStream | null {
     return this.stream;
   }
@@ -400,7 +480,7 @@ export class ProctoringService implements OnDestroy {
   }
 
   stopDetection(): void {
-    this.sessionToken++; // invalidates any in-flight scheduleLoop iterations
+    this.sessionToken++;
     this.isRunning = false;
     this.consecutiveNoFaceCount = 0;
   }
@@ -423,7 +503,6 @@ export class ProctoringService implements OnDestroy {
   }
 
   ngOnDestroy(): void {
-    
     this.stopProctoring();
     this.flagsSubject.complete();
     this.faceStatusSubject.complete();
