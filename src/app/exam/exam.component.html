@@ -1,0 +1,115 @@
+<div class="exam-page">
+  <header class="exam-header">
+    <div class="exam-title">
+      <h1>Online Examination</h1>
+      <p>Proctored Examination System</p>
+    </div>
+    <div class="timer">
+      <span>Time Remaining</span>
+      <strong>60:00</strong>
+    </div>
+  </header>
+
+  <div class="exam-content">
+    <main class="questions-section">
+      <div class="verification-card" *ngIf="!verificationComplete">
+        <h2>Candidate Identity Verification</h2>
+        <p>Please upload your registration reference image and capture your live snapshot / government ID to begin the exam.</p>
+        
+        <div class="upload-grid">
+          <div class="upload-group">
+            <label>1. Registration Photo Upload</label>
+            <input type="file" (change)="onFileSelected($event, 'reg')" accept="image/*" />
+            <img *ngIf="regPhotoSrc" [src]="regPhotoSrc" class="preview-img" alt="Registration Photo" />
+          </div>
+          <div class="upload-group">
+            <label>2. Government ID Upload (Optional)</label>
+            <input type="file" (change)="onFileSelected($event, 'id')" accept="image/*" />
+            <img *ngIf="govIdSrc" [src]="govIdSrc" class="preview-img" alt="Gov ID" />
+          </div>
+        </div>
+
+        <button class="next" style="margin-top: 20px;" (click)="verifyAndStartExam()" [disabled]="!regPhotoSrc">
+          Verify & Start Exam
+        </button>
+      </div>
+
+      <div class="question-card" *ngIf="verificationComplete">
+        <div class="question-header">
+          <span>Question 1 of 10</span>
+          <span>Topic: Core Engineering</span>
+        </div>
+        <h2>Implement and verify system runtime controls under remote constraints. Write out your design pattern approach below.</h2>
+        
+        <div class="options">
+          <textarea rows="6" placeholder="Type your answer here..." style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #ddd; font-family: inherit;"></textarea>
+        </div>
+
+        <div class="navigation">
+          <button class="previous">Previous</button>
+          <button class="next">Next Question</button>
+        </div>
+      </div>
+    </main>
+
+    <aside class="proctoring-section">
+      <div class="camera-card">
+        <div class="camera-header">
+          <div class="proctor-title">
+            <span>Live Feed & AI Guard</span>
+          </div>
+          <div class="status active">
+            <span class="status-dot">●</span>
+            <span>Active</span>
+          </div>
+        </div>
+        
+        <div class="video-container">
+          <video #proctorVideo autoplay muted playsinline></video>
+        </div>
+        
+        <div id="face-detection" class="face-status">
+          {{ faceStatusText }}
+        </div>
+      </div>
+
+      <div class="proctoring-info">
+        <h3>Proctoring Status</h3>
+        
+        <div class="status-row">
+          <div class="status-label">
+            <span class="indicator green"></span>
+            <span>Camera Feed</span>
+          </div>
+          <strong>{{ cameraActive ? 'Active' : 'Offline' }}</strong>
+        </div>
+        
+        <div class="status-row">
+          <div class="status-label">
+            <span class="indicator green"></span>
+            <span>Face Recognition</span>
+          </div>
+          <strong>{{ faceMatchStatus }}</strong>
+        </div>
+        
+        <div class="status-row">
+          <div class="status-label">
+            <span class="indicator green"></span>
+            <span>Object Detector</span>
+          </div>
+          <strong>Active (Phones/Books/Laptops/Headphones)</strong>
+        </div>
+      </div>
+
+      <div class="proctoring-info instructions">
+        <h3>Exam Instructions</h3>
+        <ul>
+          <li>Keep your face visible inside the camera frame.</li>
+          <li>Do not leave or switch the examination window/tab.</li>
+          <li>Only one person should be visible.</li>
+          <li>No cell phones, headphones, books, or extra screens.</li>
+        </ul>
+      </div>
+    </aside>
+  </div>
+</div>
