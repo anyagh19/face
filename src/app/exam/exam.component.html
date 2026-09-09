@@ -1,77 +1,87 @@
 <div class="exam-page">
 
-  <!-- ===================================================== -->
-  <!-- HEADER -->
-  <!-- ===================================================== -->
+  <!-- =====================================================
+       HEADER
+       ===================================================== -->
 
   <header class="exam-header">
 
     <div class="exam-title">
 
-      <h1>
-        Online Examination
-      </h1>
+      <h1>Online Examination</h1>
 
-      <p>
-        Proctored Examination System
-      </p>
+      <span
+        class="exam-status"
+        [class.active]="examStarted"
+      >
+        {{ examStarted ? 'Exam Active' : 'Verification Required' }}
+      </span>
 
     </div>
 
+
     <div class="timer">
 
-      <span>
+      <span class="timer-label">
         Time Remaining
       </span>
 
-      <strong>
-        60:00
-      </strong>
+      <span class="timer-value">
+        {{ formattedTime }}
+      </span>
 
     </div>
 
   </header>
 
 
-  <!-- ===================================================== -->
-  <!-- CONTENT -->
-  <!-- ===================================================== -->
 
-  <div class="exam-content">
+  <!-- =====================================================
+       MAIN CONTENT
+       ===================================================== -->
 
-
-    <!-- =================================================== -->
-    <!-- LEFT SIDE -->
-    <!-- =================================================== -->
-
-    <main class="questions-section">
+  <main class="exam-content">
 
 
-      <!-- ================================================= -->
-      <!-- IDENTITY VERIFICATION -->
-      <!-- ================================================= -->
+    <!-- ===================================================
+         LEFT COLUMN
+         =================================================== -->
+
+    <section class="exam-left">
+
+
+      <!-- =================================================
+           IDENTITY VERIFICATION
+           ================================================= -->
 
       <div
-        class="verification-card"
+        class="card verification-card"
         *ngIf="!verificationComplete"
       >
 
-        <h2>
-          Candidate Identity Verification
-        </h2>
+        <div class="card-header">
 
-        <p>
-          Upload your registration photo.
-          The uploaded photo will be compared with
-          your live camera snapshot.
-        </p>
+          <div>
+
+            <h2>Identity Verification</h2>
+
+            <p>
+              Verify your identity before starting the exam.
+            </p>
+
+          </div>
+
+        </div>
 
 
-        <div class="upload-group">
+        <!-- Registration Photo -->
 
-          <label>
+        <div class="registration-section">
+
+          <label class="upload-label">
             Registration Photo
           </label>
+
 
           <input
             type="file"
@@ -80,147 +90,167 @@
           />
 
 
-          <!-- Photo preview -->
-
-          <img
+          <div
+            class="registration-preview"
             *ngIf="regPhotoSrc"
-            [src]="regPhotoSrc"
-            class="preview-img"
-            alt="Registration Photo"
-          />
+          >
+
+            <img
+              [src]="regPhotoSrc"
+              alt="Registration photo"
+            />
+
+          </div>
 
         </div>
 
 
+        <!-- =============================================
+             CHANGED:
+             The duplicate <video #proctorVideo> that used to live
+             here has been removed. There is now only ONE video
+             element on the page (in the "Live Camera" card on the
+             right), which is never torn out of the DOM, so the
+             stream never goes blank when this verification card
+             disappears after a successful match.
+             ============================================= -->
+
+        <p class="verification-camera-note">
+          Make sure your face is clearly visible in the camera
+          preview on the right before verifying.
+        </p>
+
+
+        <!-- Face status -->
+
+        <div class="face-status">
+
+          <span class="status-dot"></span>
+
+          <span>
+            {{ faceStatusText }}
+          </span>
+
+        </div>
+
+
+        <!-- Match status -->
+
+        <div
+          class="face-match-status"
+          [class.success]="identityVerified"
+          [class.error]="identityMismatch"
+        >
+
+          {{ faceMatchStatus }}
+
+        </div>
+
+
+        <!-- Verify button -->
+
         <button
           type="button"
-          class="next verify-button"
+          class="primary-button"
+          [disabled]="
+            !regPhotoFile ||
+            !cameraActive ||
+            verifying
+          "
           (click)="verifyAndStartExam()"
-          [disabled]="!regPhotoFile || !cameraActive"
         >
-          Verify Identity & Start Exam
+
+          <span *ngIf="!verifying">
+            Verify & Start Exam
+          </span>
+
+          <span *ngIf="verifying">
+            Verifying...
+          </span>
+
         </button>
 
       </div>
 
 
-      <!-- ================================================= -->
-      <!-- EXAM QUESTION -->
-      <!-- ================================================= -->
+
+      <!-- =================================================
+           NEW: PRE-EXAM ROOM CHECK
+           Shown only during the fixed window between a successful
+           identity match and the exam timer starting. Results here
+           are kept separate from the "Proctoring Report" below —
+           they are pre-exam room-check findings, not exam-time
+           violations.
+           ================================================= -->
 
       <div
-        class="question-card"
-        *ngIf="verificationComplete"
+        class="card room-check-card"
+        *ngIf="roomCheckActive"
       >
 
-        <div class="question-header">
+        <div class="card-header">
 
-          <span>
-            Question 1 of 10
-          </span>
+          <div>
 
-          <span>
-            Topic: Core Engineering
-          </span>
+            <h2>Room Check</h2>
 
-        </div>
+            <p>
+              Please slowly turn your camera around the room so we
+              can check your surroundings before the exam begins.
+            </p>
 
-
-        <h2>
-          Implement and verify system runtime controls
-          under remote constraints. Write out your
-          design pattern approach below.
-        </h2>
-
-
-        <div class="options">
-
-          <textarea
-            rows="8"
-            placeholder="Type your answer here..."
-          ></textarea>
+          </div>
 
         </div>
 
 
-        <!-- Navigation -->
+        <div class="room-check-countdown">
 
-        <div class="navigation">
+          Scanning room… {{ roomCheckSecondsRemaining }}s remaining
 
-          <button
-            type="button"
-            class="previous"
+        </div>
+
+
+        <div
+          class="room-check-results"
+          *ngIf="roomCheckResults.length > 0"
+        >
+
+          <div
+            class="room-check-item"
+            *ngFor="let result of roomCheckResults"
           >
-            Previous
-          </button>
 
-          <button
-            type="button"
-            class="next"
-          >
-            Next Question
-          </button>
+            <span class="room-check-time">
+              {{ result.timestamp | date:'HH:mm:ss' }}
+            </span>
+
+            <span class="room-check-message">
+              {{ result.message }}
+            </span>
+
+          </div>
 
         </div>
 
       </div>
 
 
-      <!-- ================================================= -->
-      <!-- PROCTORING REPORT -->
-      <!-- BELOW QUESTION -->
-      <!-- ================================================= -->
 
-      <div
-        class="proctor-log-card"
-        *ngIf="verificationComplete"
-      >
+      <!-- =================================================
+           EXISTING PROCTORING REPORT
+           ================================================= -->
 
-        <div class="proctor-log-header">
+      <div class="card report-card">
+
+        <div class="card-header">
 
           <div>
 
-            <h3>
-              Proctoring Report
-            </h3>
+            <h2>Proctoring Report</h2>
 
             <p>
-              Live monitoring events and alerts
-            </p>
-
-          </div>
-
-
-          <span class="log-count">
-
-            {{ reports.length }}
-
-          </span>
-
-        </div>
-
-
-        <!-- ================================================= -->
-        <!-- NO EVENTS -->
-        <!-- ================================================= -->
-
-        <div
-          class="empty-log"
-          *ngIf="reports.length === 0"
-        >
-
-          <span class="empty-icon">
-            ✓
-          </span>
-
-          <div>
-
-            <strong>
-              No proctoring events
-            </strong>
-
-            <p>
-              No suspicious activity has been detected.
+              Detected events during the examination.
             </p>
 
           </div>
@@ -228,56 +258,36 @@
         </div>
 
 
-        <!-- ================================================= -->
-        <!-- EVENT LOG -->
-        <!-- ================================================= -->
-
         <div
-          class="proctor-log-list"
+          class="report-list"
           *ngIf="reports.length > 0"
         >
 
           <div
-            class="proctor-log"
+            class="report-item"
             *ngFor="let report of reports"
-            [ngClass]="getReportClass(report.severity)"
+            [ngClass]="getSeverityClass(report.severity)"
           >
 
-            <!-- Time -->
+            <div class="report-icon">
 
-            <div class="log-time">
-
-              {{ report.timestamp | date:'HH:mm:ss' }}
+              {{ getSeverityIcon(report.severity) }}
 
             </div>
 
 
-            <!-- Icon -->
+            <div class="report-content">
 
-            <div class="log-icon">
-
-              {{ getReportIcon(report.message) }}
-
-            </div>
-
-
-            <!-- Details -->
-
-            <div class="log-details">
-
-              <div class="log-message">
+              <div class="report-message">
 
                 {{ report.message }}
 
               </div>
 
-              <div class="log-meta">
 
-                <span class="log-severity">
+              <div class="report-time">
 
-                  {{ report.severity | titlecase }}
-
-                </span>
+                {{ report.timestamp | date:'HH:mm:ss' }}
 
               </div>
 
@@ -287,64 +297,67 @@
 
         </div>
 
+
+        <div
+          class="empty-report"
+          *ngIf="reports.length === 0"
+        >
+
+          No proctoring events detected.
+
+        </div>
+
       </div>
 
-    </main>
+    </section>
 
 
-    <!-- ===================================================== -->
-    <!-- RIGHT SIDE -->
-    <!-- KEEP PROCTORING STATUS -->
-    <!-- ===================================================== -->
 
-    <aside class="proctoring-section">
+    <!-- ===================================================
+         RIGHT COLUMN
+         =================================================== -->
+
+    <aside class="exam-right">
 
 
-      <!-- ================================================= -->
-      <!-- CAMERA -->
-      <!-- ================================================= -->
+      <!-- =================================================
+           CAMERA
+           This is now the ONLY <video #proctorVideo> element in
+           the entire template. It is never wrapped in *ngIf, so it
+           is never removed from the DOM and the stream stays
+           attached for the whole exam lifetime.
+           ================================================= -->
 
-      <div class="camera-card">
+      <div class="card camera-card">
 
-        <div class="camera-header">
+        <div class="card-header">
 
-          <div class="proctor-title">
+          <div>
 
-            <span>
-              Live Feed & AI Guard
-            </span>
+            <h2>Live Camera</h2>
+
+            <p>
+              Your camera is being monitored.
+            </p>
 
           </div>
 
 
           <div
-            class="status"
+            class="camera-status"
             [class.active]="cameraActive"
-            [class.inactive]="!cameraActive"
           >
 
-            <span class="status-dot">
-              ●
-            </span>
+            <span class="status-dot"></span>
 
-            <span>
-
-              {{
-                cameraActive
-                  ? 'Active'
-                  : 'Offline'
-              }}
-
-            </span>
+            {{ cameraActive ? 'Active' : 'Inactive' }}
 
           </div>
 
         </div>
 
 
-        <!-- Camera -->
-
-        <div class="video-container">
+        <div class="camera-container">
 
           <video
             #proctorVideo
@@ -353,224 +366,162 @@
             playsinline
           ></video>
 
-        </div>
 
+          <div
+            class="camera-error"
+            *ngIf="cameraError"
+          >
 
-        <!-- Current face message -->
+            Unable to access camera.
 
-        <div
-          class="face-status"
-          [class.warning]="
-            noFaceDetected ||
-            multiplePersonDetected ||
-            identityMismatch
-          "
-        >
-
-          {{ faceStatusText }}
+          </div>
 
         </div>
 
       </div>
 
 
-      <!-- ================================================= -->
-      <!-- PROCTORING STATUS -->
-      <!-- ================================================= -->
 
-      <div class="proctoring-info">
+      <!-- =================================================
+           LIVE PROCTORING LOGS
+           ================================================= -->
 
-        <h3>
-          Proctoring Status
-        </h3>
+      <div class="card live-console">
 
+        <div class="console-header">
 
-        <!-- Camera -->
+          <div>
 
-        <div class="status-row">
+            <h2>
+              Live Proctoring Logs
+            </h2>
 
-          <div class="status-label">
-
-            <span
-              class="indicator"
-              [class.green]="cameraActive"
-              [class.red]="!cameraActive"
-            ></span>
-
-            <span>
-              Camera Feed
-            </span>
+            <p>
+              Real-time AI monitoring activity
+            </p>
 
           </div>
 
-          <strong>
 
-            {{
-              cameraActive
-                ? 'Active'
-                : 'Offline'
-            }}
+          <div class="console-header-actions">
 
-          </strong>
+            <button
+              type="button"
+              class="refresh-log-button"
+              (click)="refreshLogs()"
+            >
+              Refresh
+            </button>
+
+
+            <button
+              type="button"
+              class="clear-log-button"
+              (click)="clearLiveLogs()"
+            >
+              Clear
+            </button>
+
+          </div>
 
         </div>
 
 
-        <!-- Face -->
+        <div class="console-body">
 
-        <div class="status-row">
 
-          <div class="status-label">
+          <!-- Logs -->
 
-            <span
-              class="indicator"
-              [class.green]="!noFaceDetected"
-              [class.red]="noFaceDetected"
-            ></span>
+          <div
+            class="console-line"
+            *ngFor="let log of liveLogs"
+            [ngClass]="'log-' + log.type"
+          >
 
-            <span>
-              Face Detection
+            <span class="console-time">
+
+              {{ log.timestamp | date:'HH:mm:ss' }}
+
+            </span>
+
+
+            <span class="console-symbol">
+              &gt;
+            </span>
+
+
+            <span class="console-message">
+
+              {{ log.message }}
+
             </span>
 
           </div>
 
-          <strong>
 
-            {{
-              noFaceDetected
-                ? 'No Face'
-                : 'Detected'
-            }}
+          <!-- Empty -->
 
-          </strong>
+          <div
+            class="console-empty"
+            *ngIf="liveLogs.length === 0"
+          >
 
-        </div>
-
-
-        <!-- Person -->
-
-        <div class="status-row">
-
-          <div class="status-label">
-
-            <span
-              class="indicator"
-              [class.green]="!multiplePersonDetected"
-              [class.red]="multiplePersonDetected"
-            ></span>
-
-            <span>
-              Person Detection
-            </span>
+            Waiting for proctoring activity...
 
           </div>
 
-          <strong>
-
-            {{
-              multiplePersonDetected
-                ? 'Multiple People'
-                : 'Single Candidate'
-            }}
-
-          </strong>
-
-        </div>
-
-
-        <!-- Objects -->
-
-        <div class="status-row">
-
-          <div class="status-label">
-
-            <span
-              class="indicator"
-              [class.green]="!unauthorizedObjectDetected"
-              [class.red]="unauthorizedObjectDetected"
-            ></span>
-
-            <span>
-              Object Detection
-            </span>
-
-          </div>
-
-          <strong>
-
-            {{
-              unauthorizedObjectDetected
-                ? 'Restricted Object'
-                : 'Clear'
-            }}
-
-          </strong>
-
-        </div>
-
-
-        <!-- Identity -->
-
-        <div class="status-row">
-
-          <div class="status-label">
-
-            <span
-              class="indicator"
-              [class.green]="
-                verificationComplete &&
-                !identityMismatch
-              "
-              [class.red]="identityMismatch"
-            ></span>
-
-            <span>
-              Identity
-            </span>
-
-          </div>
-
-          <strong>
-
-            {{ faceMatchStatus }}
-
-          </strong>
 
         </div>
 
       </div>
 
 
-      <!-- ================================================= -->
-      <!-- INSTRUCTIONS -->
-      <!-- ================================================= -->
 
-      <div class="proctoring-info instructions">
+      <!-- =================================================
+           EXAM INSTRUCTIONS
+           ================================================= -->
 
-        <h3>
-          Exam Instructions
-        </h3>
+      <div class="card instructions-card">
+
+        <div class="card-header">
+
+          <div>
+
+            <h2>
+              Exam Instructions
+            </h2>
+
+          </div>
+
+        </div>
+
 
         <ul>
 
           <li>
-            Keep your face visible inside the camera frame.
+            Keep your face visible to the camera.
           </li>
 
           <li>
-            Do not switch the examination tab.
+            Do not switch browser tabs.
           </li>
 
           <li>
-            Only one person should be visible.
+            Do not leave the examination window.
           </li>
 
           <li>
-            No mobile phones or restricted objects.
+            Do not allow another person to appear
+            in the camera.
           </li>
 
           <li>
-            Keep the camera enabled throughout the exam.
+            Do not use unauthorized objects.
+          </li>
+
+          <li>
+            Keep your camera enabled throughout
+            the examination.
           </li>
 
         </ul>
@@ -579,6 +530,6 @@
 
     </aside>
 
-  </div>
+  </main>
 
 </div>
