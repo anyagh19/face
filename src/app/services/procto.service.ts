@@ -1,75 +1,20 @@
-import { Injectable, Inject, InjectionToken, PLATFORM_ID, OnDestroy } from '@angular/core';
+import { Injectable, Inject, PLATFORM_ID, OnDestroy } from '@angular/core';
 import { isPlatformBrowser } from '@angular/common';
 import { Observable, Subject } from 'rxjs';
 
-// =============================================================================
-// Types
-// =============================================================================
+import type {
+  ProctoringFlag,
+  ProctoringFlagType,
+  ProctoringSeverity,
+  FaceVerificationResult,
+  IdentityVerificationResult,
+  DetectionLogEntry
+} from './procto.types';
+import { ProctoringConfig, PROCTORING_CONFIG } from './procto.config';
 
-export type ProctoringFlagType =
-  | 'no_face_detected'
-  | 'additional_person_detected'
-  | 'unauthorized_object'
-  | 'tab_switched'
-  | 'window_lost_focus'
-  | 'identity_mismatch'
-  | 'camera_error';
-
-export type ProctoringSeverity = 'low' | 'medium' | 'high';
-
-export interface ProctoringFlag {
-  candidateId: string;
-  examId: string;
-  flagType: ProctoringFlagType;
-  severity: ProctoringSeverity;
-  timestamp: string;
-  snapshot: string | null;
-}
-
-export interface FaceVerificationResult {
-  isMatch: boolean;
-  distance: number;
-  snapshot: string | null;
-}
-
-export interface IdentityVerificationResult extends FaceVerificationResult {
-  governmentIdSnapshot: string | null;
-}
-
-// =============================================================================
-// Config
-// =============================================================================
-
-export interface ProctoringConfig {
-  modelUrl: string;
-  watchedItems: string[];
-  objectDetectionMinScore: number;
-  personCountMinScore: number;
-  faceCheckIntervalMs: number;
-  objectCheckIntervalMs: number;
-  consecutiveMissesBeforeFlag: number;
-  faceMatchDistanceThreshold: number;
-  defaultIdentityCheckIntervalMs: number;
-  snapshotQuality: number;
-}
-
-export const DEFAULT_PROCTORING_CONFIG: ProctoringConfig = {
-  modelUrl: '/models/face-api',
-  watchedItems: ['cell phone', 'book', 'laptop', 'tvmonitor'],
-  objectDetectionMinScore: 0.3,
-  personCountMinScore: 0.6,
-  faceCheckIntervalMs: 1000,
-  objectCheckIntervalMs: 5000,
-  consecutiveMissesBeforeFlag: 3,
-  faceMatchDistanceThreshold: 0.6,
-  defaultIdentityCheckIntervalMs: 5 * 60 * 1000,
-  snapshotQuality: 0.6
-};
-
-export const PROCTORING_CONFIG = new InjectionToken<ProctoringConfig>('PROCTORING_CONFIG', {
-  providedIn: 'root',
-  factory: () => DEFAULT_PROCTORING_CONFIG
-});
+export type { ProctoringConfig } from './procto.config';
+export { PROCTORING_CONFIG, DEFAULT_PROCTORING_CONFIG } from './procto.config';
+export * from './procto.types';
 
 // =============================================================================
 // Service
@@ -104,19 +49,60 @@ export class ProctoringService implements OnDestroy {
   public candidateId = 'unknown-candidate';
   public examId = 'unknown-exam';
 
+  // ---------------------------------------------------------------------
+  // Edge-tracking state. Each of these represents "is this problem
+  // currently active?" so we can emit exactly ONE flag when it starts and
+  // exactly ONE clear/restored flag when it ends, instead of re-firing on
+  // every polling tick while the condition persists.
+  // ---------------------------------------------------------------------
+  private lastFaceState: 'face_detected' | 'no_face_detected' | null = null;
+  private faceFlaggedMissing = false; // whether no_face_detected has actually been raised (post-debounce)
+  private multiFaceActive = false;    // "extra person" signal from face detector
+  private multiPersonObjActive = false; // "extra person" signal from object detector
+  private objectActive = false;
+  private identityMismatchActive = false;
+  private tabHidden = false;
+  private windowBlurred = false;
+
+  private get personActive(): boolean {
+    return this.multiFaceActive || this.multiPersonObjActive;
+  }
+
   private readonly flagsSubject = new Subject<ProctoringFlag>();
   readonly flags$: Observable<ProctoringFlag> = this.flagsSubject.asObservable();
+
+  /**
+   * Unified, human-readable, console-style event stream. One entry per
+   * meaningful state change (violation started, violation cleared, face
+   * lost/found, tab switched/restored, etc.) — never a periodic heartbeat.
+   * This is what a UI should bind to for an activity log.
+   */
+  private readonly logsSubject = new Subject<DetectionLogEntry>();
+  readonly logs$: Observable<DetectionLogEntry> = this.logsSubject.asObservable();
 
   private readonly faceStatusSubject = new Subject<'face_detected' | 'no_face_detected'>();
   readonly faceStatus$ = this.faceStatusSubject.asObservable();
 
   private readonly visibilityHandler = () => {
     if (document.hidden) {
-      this.emitFlag('tab_switched', 'medium');
+      this.tabHidden = true;
+      this.emitFlag('tab_switched', 'medium', 'Exam tab was switched or minimized.');
+    } else if (this.tabHidden) {
+      this.tabHidden = false;
+      this.emitFlag('tab_restored', 'low', 'Returned to the exam tab.');
     }
   };
   private readonly blurHandler = () => {
-    this.emitFlag('window_lost_focus', 'medium');
+    if (!this.windowBlurred) {
+      this.windowBlurred = true;
+      this.emitFlag('window_lost_focus', 'medium', 'Exam window lost focus.');
+    }
+  };
+  private readonly focusHandler = () => {
+    if (this.windowBlurred) {
+      this.windowBlurred = false;
+      this.emitFlag('window_focus_restored', 'low', 'Exam window regained focus.');
+    }
   };
 
   constructor(
@@ -182,7 +168,7 @@ export class ProctoringService implements OnDestroy {
     this.objectModel = await this.withRetry(() => this.cocoSsd.load());
   }
 
-  private async withRetry<T>(fn: () => Promise<T>, retries = 1): Promise<T> {
+  private async withRetry<T>(fn: () => Promise<T>, retries = 2): Promise<T> {
     try {
       return await fn();
     } catch (err) {
@@ -202,7 +188,7 @@ export class ProctoringService implements OnDestroy {
         'HTTP for any host other than localhost/127.0.0.1 — this is a browser-enforced ' +
         'restriction, not something fixable in code.'
       );
-      this.emitFlag('camera_error', 'high');
+      this.emitFlag('camera_error', 'high', 'Camera unavailable: page is not on a secure origin.');
       return false;
     }
 
@@ -213,7 +199,7 @@ export class ProctoringService implements OnDestroy {
         'or (c) the page is embedded in an iframe whose "allow" attribute does not include ' +
         '"camera", or whose parent site sends a Permissions-Policy header blocking camera access.'
       );
-      this.emitFlag('camera_error', 'high');
+      this.emitFlag('camera_error', 'high', 'Camera API not available in this browser/context.');
       return false;
     }
 
@@ -237,11 +223,9 @@ export class ProctoringService implements OnDestroy {
         SecurityError: 'Blocked by a security policy (insecure context or Permissions-Policy).',
         AbortError: 'Camera access was aborted, possibly due to a hardware or OS-level issue.'
       };
-      console.error(
-        `Unable to access camera [${name ?? 'UnknownError'}]: ${reasons[name ?? ''] ?? 'Unrecognized error.'}`,
-        error
-      );
-      this.emitFlag('camera_error', 'high');
+      const reason = reasons[name ?? ''] ?? 'Unrecognized error.';
+      console.error(`Unable to access camera [${name ?? 'UnknownError'}]: ${reason}`, error);
+      this.emitFlag('camera_error', 'high', `Camera access failed: ${reason}`);
       return false;
     }
   }
@@ -254,10 +238,23 @@ export class ProctoringService implements OnDestroy {
     this.isRunning = true;
     const token = this.sessionToken;
 
+    this.logsSubject.next({
+      message: 'Live monitoring started.',
+      severity: 'low',
+      timestamp: new Date().toISOString()
+    });
+
     this.scheduleLoop(token, () => this.detectFace(token), this.config.faceCheckIntervalMs);
     this.scheduleLoop(token, () => this.detectObjects(token), this.config.objectCheckIntervalMs);
   }
 
+  /**
+   * Runs `work` immediately, then re-schedules itself `delayMs` after each
+   * run completes. Previously this waited a full `delayMs` before the very
+   * first check — meaning a violation already present when monitoring
+   * started (e.g. a phone already on the desk) could go undetected for up
+   * to 5 seconds. Running the first check with no delay closes that gap.
+   */
   private scheduleLoop(token: number, work: () => Promise<void>, delayMs: number): void {
     const tick = async () => {
       if (token !== this.sessionToken) return;
@@ -265,33 +262,70 @@ export class ProctoringService implements OnDestroy {
       if (token !== this.sessionToken) return;
       setTimeout(tick, delayMs);
     };
-    setTimeout(tick, delayMs);
+    tick();
   }
 
   private async detectFace(token: number): Promise<void> {
     if (!this.video || this.video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return;
 
     try {
-      const detections = await this.faceapi.detectAllFaces(this.video, this.faceMatcherOptions);
+      // Cast to any[] explicitly: faceapi is typed `any`, and TS's generic
+      // inference through withTimeout<T>()'s Promise<T> wrapper widens an
+      // `any`-typed input to `unknown` rather than `any` — a known
+      // TS quirk, not a real type-safety issue here.
+      const detections = (await this.withTimeout(
+        this.faceapi.detectAllFaces(this.video, this.faceMatcherOptions),
+        5000,
+        'detectFace'
+      )) as any[];
       if (token !== this.sessionToken) return;
 
       if (detections.length === 0) {
         this.consecutiveNoFaceCount++;
-        this.faceStatusSubject.next('no_face_detected');
 
-        if (this.consecutiveNoFaceCount >= this.config.consecutiveMissesBeforeFlag) {
-          this.emitFlag('no_face_detected', 'medium');
+        if (this.lastFaceState !== 'no_face_detected') {
+          this.lastFaceState = 'no_face_detected';
+          this.faceStatusSubject.next('no_face_detected');
+        }
+
+        if (this.consecutiveNoFaceCount === this.config.consecutiveMissesBeforeFlag) {
+          this.faceFlaggedMissing = true;
+          this.emitFlag('no_face_detected', 'medium', 'No face detected in the camera frame.');
+          console.warn('No face detected for consecutive frames:', this.consecutiveNoFaceCount);
         }
       } else {
+        const wasFlaggedMissing = this.faceFlaggedMissing;
         this.consecutiveNoFaceCount = 0;
-        this.faceStatusSubject.next('face_detected');
+        this.faceFlaggedMissing = false;
 
-        if (detections.length > 1) {
-          this.emitFlag('additional_person_detected', 'high');
+        if (this.lastFaceState !== 'face_detected') {
+          this.lastFaceState = 'face_detected';
+          this.faceStatusSubject.next('face_detected');
+          if (wasFlaggedMissing) {
+            this.emitFlag('face_restored', 'low', 'Face detected again.');
+            console.log('Face restored after being flagged missing.');
+          }
+        }
+
+        const facesMulti = detections.length > 1;
+        if (facesMulti && !this.multiFaceActive) {
+          this.multiFaceActive = true;
+          if (!this.multiPersonObjActive) {
+            this.emitFlag('additional_person_detected', 'high', 'Multiple faces detected in frame.');
+            console.warn('Multiple faces detected:', detections.length);
+          }
+        } else if (!facesMulti && this.multiFaceActive) {
+          this.multiFaceActive = false;
+          if (!this.multiPersonObjActive) {
+            this.emitFlag('person_left', 'low', 'Only one person visible now.');
+          }
         }
       }
     } catch (error) {
-      console.error('Face detection error:', error);
+      // Logged and swallowed (not re-thrown) so scheduleLoop's tick() still
+      // schedules the NEXT iteration — one bad/slow frame shouldn't
+      // permanently kill ongoing monitoring.
+      console.error('Face detection error (loop continues):', error);
     }
   }
 
@@ -299,26 +333,105 @@ export class ProctoringService implements OnDestroy {
     if (!this.video || !this.objectModel || this.video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return;
 
     try {
-      const predictions = await this.objectModel.detect(
-        this.video,
-        20,
-        this.config.objectDetectionMinScore
-      );
+      const predictions = (await this.withTimeout(
+        this.objectModel.detect(this.video, this.config.maxObjectBoxes, this.config.objectDetectionMinScore),
+        5000,
+        'detectObjects'
+      )) as any[];
       if (token !== this.sessionToken) return;
 
       const suspicious = predictions.filter((pr: any) => this.config.watchedItems.includes(pr.class));
       if (suspicious.length > 0) {
-        this.emitFlag('unauthorized_object', 'high');
+        if (!this.objectActive) {
+          this.objectActive = true;
+          const items = Array.from(new Set(suspicious.map((pr: any) => pr.class))).join(', ');
+          this.emitFlag('unauthorized_object', 'high', `Unauthorized item detected: ${items}.`);
+          console.warn('Unauthorized items detected:', suspicious.map((pr: any) => pr.class));
+        }
+      } else if (this.objectActive) {
+        this.objectActive = false;
+        this.emitFlag('object_cleared', 'low', 'Restricted item no longer visible.');
+        console.log('No unauthorized items detected in the current frame.');
       }
 
       const people = predictions.filter(
         (pr: any) => pr.class === 'person' && pr.score >= this.config.personCountMinScore
       );
-      if (people.length > 1) {
-        this.emitFlag('additional_person_detected', 'high');
+      const peopleMulti = people.length > 1;
+      if (peopleMulti && !this.multiPersonObjActive) {
+        this.multiPersonObjActive = true;
+        if (!this.multiFaceActive) {
+          this.emitFlag('additional_person_detected', 'high', 'Multiple people detected in frame.');
+        }
+      } else if (!peopleMulti && this.multiPersonObjActive) {
+        this.multiPersonObjActive = false;
+        if (!this.multiFaceActive) {
+          this.emitFlag('person_left', 'low', 'Only one person visible now.');
+        }
       }
     } catch (error) {
-      console.error('Object detection error:', error);
+      console.error('Object detection error (loop continues):', error);
+    }
+  }
+
+  /**
+   * Races a promise against a timeout so a stuck/hung inference call
+   * (e.g. a lost WebGL context, or a tab backgrounded long enough for the
+   * browser to throttle it) surfaces as a clear, catchable error instead
+   * of leaving the caller (and the UI) waiting forever with no feedback.
+   */
+  private withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        reject(new Error(`${label} timed out after ${ms}ms — likely a stuck WebGL/model call.`));
+      }, ms);
+
+      promise
+        .then(value => {
+          clearTimeout(timer);
+          resolve(value);
+        })
+        .catch(err => {
+          clearTimeout(timer);
+          reject(err);
+        });
+    });
+  }
+
+  /**
+   * Runs the FULL detection pipeline (detect → align → descriptor) rather
+   * than calling computeFaceDescriptor() on a raw, un-detected image.
+   * computeFaceDescriptor() alone assumes it's already been handed an
+   * aligned face crop; calling it on a full photo (with background, body,
+   * etc. still in frame) produces an inconsistent descriptor and is the
+   * root cause of unreliable match/mismatch results.
+   */
+  private async getFaceDescriptor(
+    element: HTMLImageElement | HTMLCanvasElement | HTMLVideoElement
+  ): Promise<Float32Array | null> {
+    if (!this.faceapi) {
+      console.error('[getFaceDescriptor] faceapi module not loaded yet — was initialize() awaited before this call?');
+      return null;
+    }
+    if (!this.faceMatcherOptions) {
+      console.error('[getFaceDescriptor] faceMatcherOptions not set yet — loadModels() may not have completed.');
+      return null;
+    }
+
+    try {
+      const detection = (await this.withTimeout(
+        this.faceapi
+          .detectSingleFace(element, this.faceMatcherOptions)
+          .withFaceLandmarks()
+          .withFaceDescriptor(),
+        8000,
+        'getFaceDescriptor'
+      )) as any;
+
+      return detection ? (detection.descriptor as Float32Array) : null;
+    } catch (error) {
+      console.error('[getFaceDescriptor] failed or timed out:', error);
+      throw error;
     }
   }
 
@@ -331,8 +444,7 @@ export class ProctoringService implements OnDestroy {
 
     try {
       await this.loadFileIntoImage(file, this.registrationImgEl);
-      const descriptor = await this.faceapi.computeFaceDescriptor(this.registrationImgEl);
-      this.registrationDescriptor = descriptor ?? null;
+      this.registrationDescriptor = await this.getFaceDescriptor(this.registrationImgEl);
       return this.registrationDescriptor !== null;
     } catch (error) {
       console.error('Failed to process registration photo:', error);
@@ -357,28 +469,60 @@ export class ProctoringService implements OnDestroy {
     });
   }
 
+  /**
+   * Compares the live camera frame against the stored registration
+   * descriptor. This is the SINGLE source of truth for identity
+   * match/mismatch — both the initial "verify before starting the exam"
+   * check and the periodic in-exam re-checks call this same method, and
+   * both get their flags/logs from here. Nothing else should independently
+   * log an identity result, to avoid duplicate log entries for one event.
+   */
   async verifyLiveSnapshot(): Promise<FaceVerificationResult | null> {
-    if (!this.video || !this.faceapi || !this.registrationDescriptor) return null;
-    if (this.video.videoWidth === 0 || this.video.videoHeight === 0) return null;
+    if (!this.video || !this.faceapi || !this.registrationDescriptor) {
+      console.warn('[verifyLiveSnapshot] missing prerequisite:', {
+        hasVideo: !!this.video,
+        hasFaceapi: !!this.faceapi,
+        hasRegistrationDescriptor: !!this.registrationDescriptor
+      });
+      return null;
+    }
+    if (this.video.videoWidth === 0 || this.video.videoHeight === 0) {
+      console.warn('[verifyLiveSnapshot] video has no dimensions yet — camera not ready.');
+      return null;
+    }
 
     const snapshot = this.captureSnapshot();
-    if (!snapshot) return null;
+    if (!snapshot) {
+      console.warn('[verifyLiveSnapshot] captureSnapshot() returned null.');
+      return null;
+    }
 
     try {
-      const liveDescriptor = await this.faceapi.computeFaceDescriptor(this.snapshotCanvas);
-      if (!liveDescriptor) return null;
+      const liveDescriptor = await this.getFaceDescriptor(this.snapshotCanvas!);
+      if (!liveDescriptor) {
+        console.warn('[verifyLiveSnapshot] no face found in the live snapshot.');
+        return null;
+      }
 
       const distance = this.faceapi.euclideanDistance(this.registrationDescriptor, liveDescriptor);
       const isMatch = distance < this.config.faceMatchDistanceThreshold;
 
       if (!isMatch) {
-        this.emitFlag('identity_mismatch', 'high');
+        this.identityMismatchActive = true;
+        this.emitFlag('identity_mismatch', 'high', `Live face does not match registration photo (distance ${distance.toFixed(2)}).`);
+      } else if (this.identityMismatchActive) {
+        this.identityMismatchActive = false;
+        this.emitFlag('identity_restored', 'low', `Identity re-verified (distance ${distance.toFixed(2)}).`);
       }
 
       return { isMatch, distance, snapshot };
     } catch (error) {
+      // getFaceDescriptor() throws (rather than hanging) on a timeout or a
+      // genuine face-api error — re-thrown here so the caller (e.g.
+      // verifyAndStartExam) can surface it to the UI instead of the
+      // promise staying pending forever.
       console.error('Live identity verification error:', error);
-      return null;
+      throw error;
     }
   }
 
@@ -390,8 +534,8 @@ export class ProctoringService implements OnDestroy {
     if (!this.faceapi) throw new Error('Face API not loaded');
 
     const [desc1, desc2] = await Promise.all([
-      this.faceapi.computeFaceDescriptor(registrationPhotoImg),
-      this.faceapi.computeFaceDescriptor(loginPhotoImg)
+      this.getFaceDescriptor(registrationPhotoImg),
+      this.getFaceDescriptor(loginPhotoImg)
     ]);
 
     if (!desc1 || !desc2) {
@@ -445,30 +589,43 @@ export class ProctoringService implements OnDestroy {
     return this.snapshotCanvas.toDataURL('image/jpeg', this.config.snapshotQuality);
   }
 
-  private emitFlag(flagType: ProctoringFlagType, severity: ProctoringSeverity): void {
+  /**
+   * The single place that produces both a structured ProctoringFlag (for
+   * consumers that want to react to specific flag types, e.g. updating a
+   * status dot) and a DetectionLogEntry (for consumers that just want a
+   * chronological, human-readable console/activity feed). Every call site
+   * above is edge-triggered — called once when a condition starts and once
+   * when it clears — so this never gets invoked on a fixed timer.
+   */
+  private emitFlag(flagType: ProctoringFlagType, severity: ProctoringSeverity, message: string): void {
+    const timestamp = new Date().toISOString();
+
     const flag: ProctoringFlag = {
       candidateId: this.candidateId,
       examId: this.examId,
       flagType,
       severity,
-      timestamp: new Date().toISOString(),
+      timestamp,
       snapshot: this.captureSnapshot()
     };
 
-    console.warn(`🚨 [PROCTOR FLAG] ${flagType} (${severity})`);
+    console.warn(`[PROCTOR] ${flagType} (${severity}): ${message}`);
     this.flagsSubject.next(flag);
+    this.logsSubject.next({ message, severity, timestamp });
   }
 
   private setupBrowserListeners(): void {
     if (!isPlatformBrowser(this.platformId)) return;
     document.addEventListener('visibilitychange', this.visibilityHandler);
     window.addEventListener('blur', this.blurHandler);
+    window.addEventListener('focus', this.focusHandler);
   }
 
   private teardownBrowserListeners(): void {
     if (!isPlatformBrowser(this.platformId)) return;
     document.removeEventListener('visibilitychange', this.visibilityHandler);
     window.removeEventListener('blur', this.blurHandler);
+    window.removeEventListener('focus', this.focusHandler);
   }
 
   getStream(): MediaStream | null {
@@ -483,6 +640,11 @@ export class ProctoringService implements OnDestroy {
     this.sessionToken++;
     this.isRunning = false;
     this.consecutiveNoFaceCount = 0;
+    this.faceFlaggedMissing = false;
+    this.lastFaceState = null;
+    this.multiFaceActive = false;
+    this.multiPersonObjActive = false;
+    this.objectActive = false;
   }
 
   stopCamera(): void {
@@ -506,5 +668,6 @@ export class ProctoringService implements OnDestroy {
     this.stopProctoring();
     this.flagsSubject.complete();
     this.faceStatusSubject.complete();
+    this.logsSubject.complete();
   }
 }

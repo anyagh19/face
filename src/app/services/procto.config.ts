@@ -34,8 +34,9 @@ export interface ProctoringConfig {
    * Consecutive missed-face checks required before actually flagging
    * 'no_face_detected'. A single missed frame (blink, brief head turn,
    * momentary camera hiccup) is normal and shouldn't fire an alert; this
-   * debounces that noise. With the default interval of 1000ms, a value of
-   * 3 means "flag only if no face was seen for ~3 consecutive seconds."
+   * debounces that noise. With the default 500ms interval, a value of 3
+   * means "flag only if no face was seen for ~1.5 consecutive seconds" —
+   * fast enough to feel instant, slow enough to not false-positive on a blink.
    */
   consecutiveMissesBeforeFlag: number;
 
@@ -47,6 +48,9 @@ export interface ProctoringConfig {
 
   /** JPEG quality (0-1) used when encoding snapshots attached to flags. */
   snapshotQuality: number;
+
+  /** Max boxes coco-ssd returns per frame. Lower = faster inference. */
+  maxObjectBoxes: number;
 }
 
 export const DEFAULT_PROCTORING_CONFIG: ProctoringConfig = {
@@ -54,12 +58,20 @@ export const DEFAULT_PROCTORING_CONFIG: ProctoringConfig = {
   watchedItems: ['cell phone', 'book', 'laptop', 'tvmonitor'],
   objectDetectionMinScore: 0.3,
   personCountMinScore: 0.6,
-  faceCheckIntervalMs: 1000,
-  objectCheckIntervalMs: 5000,
+
+  // Tightened from 1000ms/5000ms so state changes (face gone, object
+  // appears, extra person walks in) surface in roughly half a second to
+  // two seconds instead of up to five. Going much faster than this buys
+  // little extra responsiveness while meaningfully increasing CPU/GPU load
+  // from the two ML models running continuously on the video stream.
+  faceCheckIntervalMs: 500,
+  objectCheckIntervalMs: 2000,
+
   consecutiveMissesBeforeFlag: 3,
   faceMatchDistanceThreshold: 0.6,
   defaultIdentityCheckIntervalMs: 5 * 60 * 1000,
-  snapshotQuality: 0.6
+  snapshotQuality: 0.6,
+  maxObjectBoxes: 10
 };
 
 export const PROCTORING_CONFIG = new InjectionToken<ProctoringConfig>('PROCTORING_CONFIG', {

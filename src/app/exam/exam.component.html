@@ -1,115 +1,584 @@
 <div class="exam-page">
+
+  <!-- ===================================================== -->
+  <!-- HEADER -->
+  <!-- ===================================================== -->
+
   <header class="exam-header">
+
     <div class="exam-title">
-      <h1>Online Examination</h1>
-      <p>Proctored Examination System</p>
+
+      <h1>
+        Online Examination
+      </h1>
+
+      <p>
+        Proctored Examination System
+      </p>
+
     </div>
+
     <div class="timer">
-      <span>Time Remaining</span>
-      <strong>60:00</strong>
+
+      <span>
+        Time Remaining
+      </span>
+
+      <strong>
+        60:00
+      </strong>
+
     </div>
+
   </header>
 
+
+  <!-- ===================================================== -->
+  <!-- CONTENT -->
+  <!-- ===================================================== -->
+
   <div class="exam-content">
+
+
+    <!-- =================================================== -->
+    <!-- LEFT SIDE -->
+    <!-- =================================================== -->
+
     <main class="questions-section">
-      <div class="verification-card" *ngIf="!verificationComplete">
-        <h2>Candidate Identity Verification</h2>
-        <p>Please upload your registration reference image and capture your live snapshot / government ID to begin the exam.</p>
-        
-        <div class="upload-grid">
-          <div class="upload-group">
-            <label>1. Registration Photo Upload</label>
-            <input type="file" (change)="onFileSelected($event, 'reg')" accept="image/*" />
-            <img *ngIf="regPhotoSrc" [src]="regPhotoSrc" class="preview-img" alt="Registration Photo" />
-          </div>
-          <div class="upload-group">
-            <label>2. Government ID Upload (Optional)</label>
-            <input type="file" (change)="onFileSelected($event, 'id')" accept="image/*" />
-            <img *ngIf="govIdSrc" [src]="govIdSrc" class="preview-img" alt="Gov ID" />
-          </div>
+
+
+      <!-- ================================================= -->
+      <!-- IDENTITY VERIFICATION -->
+      <!-- ================================================= -->
+
+      <div
+        class="verification-card"
+        *ngIf="!verificationComplete"
+      >
+
+        <h2>
+          Candidate Identity Verification
+        </h2>
+
+        <p>
+          Upload your registration photo.
+          The uploaded photo will be compared with
+          your live camera snapshot.
+        </p>
+
+
+        <div class="upload-group">
+
+          <label>
+            Registration Photo
+          </label>
+
+          <input
+            type="file"
+            accept="image/*"
+            (change)="onRegistrationPhotoSelected($event)"
+          />
+
+
+          <!-- Photo preview -->
+
+          <img
+            *ngIf="regPhotoSrc"
+            [src]="regPhotoSrc"
+            class="preview-img"
+            alt="Registration Photo"
+          />
+
         </div>
 
-        <button class="next" style="margin-top: 20px;" (click)="verifyAndStartExam()" [disabled]="!regPhotoSrc">
-          Verify & Start Exam
+
+        <button
+          type="button"
+          class="next verify-button"
+          (click)="verifyAndStartExam()"
+          [disabled]="!regPhotoFile || !cameraActive"
+        >
+          Verify Identity & Start Exam
         </button>
+
       </div>
 
-      <div class="question-card" *ngIf="verificationComplete">
+
+      <!-- ================================================= -->
+      <!-- EXAM QUESTION -->
+      <!-- ================================================= -->
+
+      <div
+        class="question-card"
+        *ngIf="verificationComplete"
+      >
+
         <div class="question-header">
-          <span>Question 1 of 10</span>
-          <span>Topic: Core Engineering</span>
+
+          <span>
+            Question 1 of 10
+          </span>
+
+          <span>
+            Topic: Core Engineering
+          </span>
+
         </div>
-        <h2>Implement and verify system runtime controls under remote constraints. Write out your design pattern approach below.</h2>
-        
+
+
+        <h2>
+          Implement and verify system runtime controls
+          under remote constraints. Write out your
+          design pattern approach below.
+        </h2>
+
+
         <div class="options">
-          <textarea rows="6" placeholder="Type your answer here..." style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #ddd; font-family: inherit;"></textarea>
+
+          <textarea
+            rows="8"
+            placeholder="Type your answer here..."
+          ></textarea>
+
         </div>
+
+
+        <!-- Navigation -->
 
         <div class="navigation">
-          <button class="previous">Previous</button>
-          <button class="next">Next Question</button>
+
+          <button
+            type="button"
+            class="previous"
+          >
+            Previous
+          </button>
+
+          <button
+            type="button"
+            class="next"
+          >
+            Next Question
+          </button>
+
         </div>
+
       </div>
+
+
+      <!-- ================================================= -->
+      <!-- PROCTORING REPORT -->
+      <!-- BELOW QUESTION -->
+      <!-- ================================================= -->
+
+      <div
+        class="proctor-log-card"
+        *ngIf="verificationComplete"
+      >
+
+        <div class="proctor-log-header">
+
+          <div>
+
+            <h3>
+              Proctoring Report
+            </h3>
+
+            <p>
+              Live monitoring events and alerts
+            </p>
+
+          </div>
+
+
+          <span class="log-count">
+
+            {{ reports.length }}
+
+          </span>
+
+        </div>
+
+
+        <!-- ================================================= -->
+        <!-- NO EVENTS -->
+        <!-- ================================================= -->
+
+        <div
+          class="empty-log"
+          *ngIf="reports.length === 0"
+        >
+
+          <span class="empty-icon">
+            ✓
+          </span>
+
+          <div>
+
+            <strong>
+              No proctoring events
+            </strong>
+
+            <p>
+              No suspicious activity has been detected.
+            </p>
+
+          </div>
+
+        </div>
+
+
+        <!-- ================================================= -->
+        <!-- EVENT LOG -->
+        <!-- ================================================= -->
+
+        <div
+          class="proctor-log-list"
+          *ngIf="reports.length > 0"
+        >
+
+          <div
+            class="proctor-log"
+            *ngFor="let report of reports"
+            [ngClass]="getReportClass(report.severity)"
+          >
+
+            <!-- Time -->
+
+            <div class="log-time">
+
+              {{ report.timestamp | date:'HH:mm:ss' }}
+
+            </div>
+
+
+            <!-- Icon -->
+
+            <div class="log-icon">
+
+              {{ getReportIcon(report.message) }}
+
+            </div>
+
+
+            <!-- Details -->
+
+            <div class="log-details">
+
+              <div class="log-message">
+
+                {{ report.message }}
+
+              </div>
+
+              <div class="log-meta">
+
+                <span class="log-severity">
+
+                  {{ report.severity | titlecase }}
+
+                </span>
+
+              </div>
+
+            </div>
+
+          </div>
+
+        </div>
+
+      </div>
+
     </main>
 
+
+    <!-- ===================================================== -->
+    <!-- RIGHT SIDE -->
+    <!-- KEEP PROCTORING STATUS -->
+    <!-- ===================================================== -->
+
     <aside class="proctoring-section">
+
+
+      <!-- ================================================= -->
+      <!-- CAMERA -->
+      <!-- ================================================= -->
+
       <div class="camera-card">
+
         <div class="camera-header">
+
           <div class="proctor-title">
-            <span>Live Feed & AI Guard</span>
+
+            <span>
+              Live Feed & AI Guard
+            </span>
+
           </div>
-          <div class="status active">
-            <span class="status-dot">●</span>
-            <span>Active</span>
+
+
+          <div
+            class="status"
+            [class.active]="cameraActive"
+            [class.inactive]="!cameraActive"
+          >
+
+            <span class="status-dot">
+              ●
+            </span>
+
+            <span>
+
+              {{
+                cameraActive
+                  ? 'Active'
+                  : 'Offline'
+              }}
+
+            </span>
+
           </div>
+
         </div>
-        
+
+
+        <!-- Camera -->
+
         <div class="video-container">
-          <video #proctorVideo autoplay muted playsinline></video>
+
+          <video
+            #proctorVideo
+            autoplay
+            muted
+            playsinline
+          ></video>
+
         </div>
-        
-        <div id="face-detection" class="face-status">
+
+
+        <!-- Current face message -->
+
+        <div
+          class="face-status"
+          [class.warning]="
+            noFaceDetected ||
+            multiplePersonDetected ||
+            identityMismatch
+          "
+        >
+
           {{ faceStatusText }}
+
         </div>
+
       </div>
+
+
+      <!-- ================================================= -->
+      <!-- PROCTORING STATUS -->
+      <!-- ================================================= -->
 
       <div class="proctoring-info">
-        <h3>Proctoring Status</h3>
-        
+
+        <h3>
+          Proctoring Status
+        </h3>
+
+
+        <!-- Camera -->
+
         <div class="status-row">
+
           <div class="status-label">
-            <span class="indicator green"></span>
-            <span>Camera Feed</span>
+
+            <span
+              class="indicator"
+              [class.green]="cameraActive"
+              [class.red]="!cameraActive"
+            ></span>
+
+            <span>
+              Camera Feed
+            </span>
+
           </div>
-          <strong>{{ cameraActive ? 'Active' : 'Offline' }}</strong>
+
+          <strong>
+
+            {{
+              cameraActive
+                ? 'Active'
+                : 'Offline'
+            }}
+
+          </strong>
+
         </div>
-        
+
+
+        <!-- Face -->
+
         <div class="status-row">
+
           <div class="status-label">
-            <span class="indicator green"></span>
-            <span>Face Recognition</span>
+
+            <span
+              class="indicator"
+              [class.green]="!noFaceDetected"
+              [class.red]="noFaceDetected"
+            ></span>
+
+            <span>
+              Face Detection
+            </span>
+
           </div>
-          <strong>{{ faceMatchStatus }}</strong>
+
+          <strong>
+
+            {{
+              noFaceDetected
+                ? 'No Face'
+                : 'Detected'
+            }}
+
+          </strong>
+
         </div>
-        
+
+
+        <!-- Person -->
+
         <div class="status-row">
+
           <div class="status-label">
-            <span class="indicator green"></span>
-            <span>Object Detector</span>
+
+            <span
+              class="indicator"
+              [class.green]="!multiplePersonDetected"
+              [class.red]="multiplePersonDetected"
+            ></span>
+
+            <span>
+              Person Detection
+            </span>
+
           </div>
-          <strong>Active (Phones/Books/Laptops/Headphones)</strong>
+
+          <strong>
+
+            {{
+              multiplePersonDetected
+                ? 'Multiple People'
+                : 'Single Candidate'
+            }}
+
+          </strong>
+
         </div>
+
+
+        <!-- Objects -->
+
+        <div class="status-row">
+
+          <div class="status-label">
+
+            <span
+              class="indicator"
+              [class.green]="!unauthorizedObjectDetected"
+              [class.red]="unauthorizedObjectDetected"
+            ></span>
+
+            <span>
+              Object Detection
+            </span>
+
+          </div>
+
+          <strong>
+
+            {{
+              unauthorizedObjectDetected
+                ? 'Restricted Object'
+                : 'Clear'
+            }}
+
+          </strong>
+
+        </div>
+
+
+        <!-- Identity -->
+
+        <div class="status-row">
+
+          <div class="status-label">
+
+            <span
+              class="indicator"
+              [class.green]="
+                verificationComplete &&
+                !identityMismatch
+              "
+              [class.red]="identityMismatch"
+            ></span>
+
+            <span>
+              Identity
+            </span>
+
+          </div>
+
+          <strong>
+
+            {{ faceMatchStatus }}
+
+          </strong>
+
+        </div>
+
       </div>
 
+
+      <!-- ================================================= -->
+      <!-- INSTRUCTIONS -->
+      <!-- ================================================= -->
+
       <div class="proctoring-info instructions">
-        <h3>Exam Instructions</h3>
+
+        <h3>
+          Exam Instructions
+        </h3>
+
         <ul>
-          <li>Keep your face visible inside the camera frame.</li>
-          <li>Do not leave or switch the examination window/tab.</li>
-          <li>Only one person should be visible.</li>
-          <li>No cell phones, headphones, books, or extra screens.</li>
+
+          <li>
+            Keep your face visible inside the camera frame.
+          </li>
+
+          <li>
+            Do not switch the examination tab.
+          </li>
+
+          <li>
+            Only one person should be visible.
+          </li>
+
+          <li>
+            No mobile phones or restricted objects.
+          </li>
+
+          <li>
+            Keep the camera enabled throughout the exam.
+          </li>
+
         </ul>
+
       </div>
+
     </aside>
+
   </div>
+
 </div>

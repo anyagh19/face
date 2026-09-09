@@ -1,80 +1,819 @@
+/* ==========================================================
+   PAGE
+   ========================================================== */
+
 .exam-page {
   min-height: 100vh;
   background: #f5f7fb;
-  padding: 24px;
-  box-sizing: border-box;
-  font-family: Arial, sans-serif;
+  color: #1f2937;
 }
+
+
+/* ==========================================================
+   HEADER
+   ========================================================== */
 
 .exam-header {
-  background: white;
-  border-radius: 12px;
-  padding: 20px 24px;
+  height: 80px;
+
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  margin-bottom: 24px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  justify-content: space-between;
+
+  padding: 0 30px;
+
+  background: #ffffff;
+
+  border-bottom: 1px solid #e5e7eb;
+
+  position: sticky;
+  top: 0;
+
+  z-index: 100;
 }
 
-.exam-header h1 { margin: 0; font-size: 24px; }
-.exam-header p { margin: 6px 0 0; color: #666; }
+.exam-title h1 {
+  margin: 0;
+  font-size: 24px;
+}
 
-.timer { text-align: right; }
-.timer span { display: block; font-size: 13px; color: #777; }
-.timer strong { display: block; margin-top: 4px; font-size: 24px; }
+.exam-title p {
+  margin: 5px 0 0;
+  color: #6b7280;
+  font-size: 14px;
+}
+
+.timer {
+  text-align: right;
+}
+
+.timer span {
+  display: block;
+  color: #6b7280;
+  font-size: 12px;
+}
+
+.timer strong {
+  font-size: 25px;
+}
+
+
+/* ==========================================================
+   MAIN LAYOUT
+   ========================================================== */
 
 .exam-content {
   display: grid;
-  grid-template-columns: 1fr 350px;
+
+  grid-template-columns:
+    minmax(0, 1fr)
+    390px;
+
   gap: 24px;
+
+  max-width: 1500px;
+
+  margin: 0 auto;
+
+  padding: 24px;
 }
 
-.questions-section { min-width: 0; }
+.questions-section {
+  min-width: 0;
+}
 
-.verification-card, .question-card {
-  background: white;
-  border-radius: 12px;
+
+/* ==========================================================
+   COMMON CARDS
+   ========================================================== */
+
+.question-card,
+.verification-card,
+.camera-card,
+.proctoring-info,
+.proctor-log-card {
+
+  background: #ffffff;
+
+  border: 1px solid #e5e7eb;
+
+  border-radius: 14px;
+
+  box-shadow:
+    0 4px 20px rgba(0, 0, 0, 0.04);
+}
+
+
+/* ==========================================================
+   VERIFICATION
+   ========================================================== */
+
+.verification-card {
   padding: 28px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
-.verification-card h2, .question-card h2 { font-size: 20px; margin-bottom: 16px; }
-.upload-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px; }
-.upload-group label { display: block; font-size: 13px; font-weight: bold; margin-bottom: 8px; }
-.preview-img { width: 100%; max-height: 120px; object-fit: contain; margin-top: 8px; border: 1px solid #ddd; border-radius: 4px; }
+.verification-card h2 {
+  margin-top: 0;
+}
+
+.verification-card p {
+  color: #6b7280;
+  line-height: 1.5;
+}
+
+.upload-group {
+  margin-top: 25px;
+}
+
+.upload-group label {
+  display: block;
+
+  margin-bottom: 10px;
+
+  font-weight: 600;
+}
+
+.upload-group input {
+  width: 100%;
+}
+
+.preview-img {
+
+  display: block;
+
+  width: 180px;
+  height: 180px;
+
+  object-fit: cover;
+
+  margin-top: 16px;
+
+  border-radius: 12px;
+
+  border: 2px solid #e5e7eb;
+}
+
+
+/* ==========================================================
+   QUESTION
+   ========================================================== */
+
+.question-card {
+  padding: 28px;
+}
 
 .question-header {
   display: flex;
   justify-content: space-between;
-  color: #666;
-  font-size: 14px;
-  margin-bottom: 24px;
+  gap: 20px;
+
+  margin-bottom: 25px;
+
+  color: #6b7280;
+
+  font-size: 13px;
 }
 
-.options { display: flex; flex-direction: column; gap: 14px; }
+.question-card h2 {
+  font-size: 20px;
+  line-height: 1.5;
+}
 
-.navigation { display: flex; justify-content: space-between; margin-top: 20px; }
-.navigation button { border: none; padding: 12px 24px; border-radius: 8px; cursor: pointer; font-size: 15px; }
-.previous { background: #e5e7eb; }
-.next { background: #111827; color: white; }
+.options {
+  margin-top: 25px;
+}
 
-.proctoring-section { display: flex; flex-direction: column; gap: 20px; }
-.camera-card { background: white; border-radius: 12px; padding: 16px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08); }
-.camera-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; font-weight: 600; }
-.status { font-size: 13px; }
+.options textarea {
 
-.video-container { width: 100%; background: #111; border-radius: 8px; overflow: hidden; }
-.video-container video { display: block; width: 100%; height: auto; min-height: 220px; object-fit: cover; transform: scaleX(-1); }
+  width: 100%;
 
-.face-status { margin-top: 12px; padding: 10px; background: #f3f4f6; border-radius: 6px; text-align: center; font-size: 14px; }
+  box-sizing: border-box;
 
-.proctoring-info { background: white; border-radius: 12px; padding: 20px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08); }
-.proctoring-info h3 { margin-top: 0; margin-bottom: 18px; }
-.status-row { display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid #eee; font-size: 14px; }
-.status-row:last-child { border-bottom: none; }
+  padding: 14px;
 
-@media (max-width: 900px) {
-  .exam-content { grid-template-columns: 1fr; }
-  .proctoring-section { order: -1; }
+  border: 1px solid #d1d5db;
+
+  border-radius: 8px;
+
+  font-family: inherit;
+
+  font-size: 15px;
+
+  resize: vertical;
+}
+
+
+/* ==========================================================
+   BUTTONS
+   ========================================================== */
+
+.navigation {
+
+  display: flex;
+
+  justify-content: space-between;
+
+  margin-top: 25px;
+}
+
+.next,
+.previous {
+
+  border: none;
+
+  border-radius: 8px;
+
+  padding: 11px 20px;
+
+  font-weight: 600;
+
+  cursor: pointer;
+}
+
+.next {
+  background: #2563eb;
+  color: white;
+}
+
+.previous {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.next:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.verify-button {
+  margin-top: 25px;
+}
+
+
+/* ==========================================================
+   PROCTORING SIDEBAR
+   ========================================================== */
+
+.proctoring-section {
+
+  display: flex;
+
+  flex-direction: column;
+
+  gap: 18px;
+}
+
+
+/* ==========================================================
+   CAMERA
+   ========================================================== */
+
+.camera-card {
+  overflow: hidden;
+}
+
+.camera-header {
+
+  display: flex;
+
+  justify-content: space-between;
+
+  align-items: center;
+
+  padding: 15px 17px;
+
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.proctor-title {
+  font-weight: 700;
+}
+
+.status {
+  font-size: 13px;
+
+  font-weight: 600;
+}
+
+.status.active {
+  color: #16a34a;
+}
+
+.status.inactive {
+  color: #dc2626;
+}
+
+.status-dot {
+  margin-right: 4px;
+}
+
+
+/* ==========================================================
+   VIDEO
+   ========================================================== */
+
+.video-container {
+
+  width: 100%;
+
+  aspect-ratio: 4 / 3;
+
+  overflow: hidden;
+
+  background: #111827;
+}
+
+.video-container video {
+
+  display: block;
+
+  width: 100%;
+
+  height: 100%;
+
+  object-fit: cover;
+}
+
+
+/* ==========================================================
+   FACE STATUS
+   ========================================================== */
+
+.face-status {
+
+  padding: 13px 16px;
+
+  background: #f0fdf4;
+
+  color: #166534;
+
+  font-size: 13px;
+
+  font-weight: 600;
+}
+
+.face-status.warning {
+
+  background: #fef2f2;
+
+  color: #b91c1c;
+}
+
+
+/* ==========================================================
+   PROCTORING STATUS
+   ========================================================== */
+
+.proctoring-info {
+
+  padding: 18px;
+}
+
+.proctoring-info h3 {
+
+  margin-top: 0;
+
+  margin-bottom: 14px;
+
+  font-size: 17px;
+}
+
+.status-row {
+
+  display: flex;
+
+  align-items: center;
+
+  justify-content: space-between;
+
+  gap: 15px;
+
+  padding: 11px 0;
+
+  border-bottom:
+    1px solid #f0f0f0;
+}
+
+.status-row:last-child {
+  border-bottom: none;
+}
+
+.status-label {
+
+  display: flex;
+
+  align-items: center;
+
+  gap: 8px;
+}
+
+.indicator {
+
+  width: 8px;
+
+  height: 8px;
+
+  border-radius: 50%;
+
+  display: inline-block;
+}
+
+.indicator.green {
+  background: #22c55e;
+}
+
+.indicator.red {
+  background: #ef4444;
+}
+
+
+/* ==========================================================
+   PROCTORING LOG
+   BELOW QUESTION
+   ========================================================== */
+
+.proctor-log-card {
+
+  margin-top: 20px;
+
+  padding: 20px;
+}
+
+
+/* ==========================================================
+   LOG HEADER
+   ========================================================== */
+
+.proctor-log-header {
+
+  display: flex;
+
+  align-items: center;
+
+  justify-content: space-between;
+
+  gap: 15px;
+
+  margin-bottom: 16px;
+}
+
+.proctor-log-header h3 {
+
+  margin: 0;
+
+  font-size: 18px;
+}
+
+.proctor-log-header p {
+
+  margin: 4px 0 0;
+
+  color: #6b7280;
+
+  font-size: 13px;
+}
+
+.log-count {
+
+  min-width: 30px;
+
+  height: 30px;
+
+  padding: 0 8px;
+
+  display: flex;
+
+  align-items: center;
+
+  justify-content: center;
+
+  border-radius: 20px;
+
+  background: #f3f4f6;
+
+  color: #374151;
+
+  font-size: 12px;
+
+  font-weight: 700;
+}
+
+
+/* ==========================================================
+   EMPTY LOG
+   ========================================================== */
+
+.empty-log {
+
+  display: flex;
+
+  align-items: center;
+
+  gap: 12px;
+
+  padding: 15px;
+
+  border-radius: 8px;
+
+  background: #f0fdf4;
+
+  color: #166534;
+}
+
+.empty-icon {
+
+  width: 32px;
+
+  height: 32px;
+
+  display: flex;
+
+  align-items: center;
+
+  justify-content: center;
+
+  border-radius: 50%;
+
+  background: #22c55e;
+
+  color: white;
+
+  font-weight: 700;
+}
+
+.empty-log strong {
+
+  display: block;
+
+  font-size: 13px;
+}
+
+.empty-log p {
+
+  margin: 3px 0 0;
+
+  font-size: 12px;
+
+  color: #4b7b59;
+}
+
+
+/* ==========================================================
+   LOG LIST
+   ========================================================== */
+
+.proctor-log-list {
+
+  display: flex;
+
+  flex-direction: column;
+
+  gap: 8px;
+
+  max-height: 300px;
+
+  overflow-y: auto;
+}
+
+
+/* ==========================================================
+   LOG ITEM
+   ========================================================== */
+
+.proctor-log {
+
+  display: grid;
+
+  grid-template-columns:
+    70px
+    30px
+    1fr;
+
+  align-items: center;
+
+  gap: 10px;
+
+  padding: 12px;
+
+  border-radius: 8px;
+
+  border-left: 4px solid;
+
+  background: #f9fafb;
+}
+
+
+/* ==========================================================
+   TIME
+   ========================================================== */
+
+.log-time {
+
+  font-family: monospace;
+
+  font-size: 11px;
+
+  color: #6b7280;
+}
+
+
+/* ==========================================================
+   ICON
+   ========================================================== */
+
+.log-icon {
+
+  font-size: 19px;
+
+  text-align: center;
+}
+
+
+/* ==========================================================
+   DETAILS
+   ========================================================== */
+
+.log-details {
+
+  display: flex;
+
+  align-items: center;
+
+  justify-content: space-between;
+
+  gap: 12px;
+}
+
+.log-message {
+
+  color: #374151;
+
+  font-size: 13px;
+
+  line-height: 1.4;
+}
+
+.log-meta {
+
+  flex-shrink: 0;
+}
+
+
+/* ==========================================================
+   SEVERITY
+   ========================================================== */
+
+.log-severity {
+
+  padding: 4px 8px;
+
+  border-radius: 5px;
+
+  font-size: 10px;
+
+  font-weight: 700;
+
+  text-transform: uppercase;
+}
+
+
+/* ==========================================================
+   MEDIUM
+   ========================================================== */
+
+.proctor-log.medium {
+
+  background: #fffbeb;
+
+  border-left-color: #f59e0b;
+}
+
+.proctor-log.medium .log-severity {
+
+  background: #fef3c7;
+
+  color: #92400e;
+}
+
+
+/* ==========================================================
+   HIGH
+   ========================================================== */
+
+.proctor-log.high {
+
+  background: #fef2f2;
+
+  border-left-color: #ef4444;
+}
+
+.proctor-log.high .log-severity {
+
+  background: #fee2e2;
+
+  color: #991b1b;
+}
+
+
+/* ==========================================================
+   LOW
+   ========================================================== */
+
+.proctor-log.low {
+
+  background: #f0fdf4;
+
+  border-left-color: #22c55e;
+}
+
+.proctor-log.low .log-severity {
+
+  background: #dcfce7;
+
+  color: #166534;
+}
+
+
+/* ==========================================================
+   INSTRUCTIONS
+   ========================================================== */
+
+.instructions ul {
+
+  margin: 0;
+
+  padding-left: 20px;
+}
+
+.instructions li {
+
+  margin-bottom: 8px;
+
+  color: #4b5563;
+
+  font-size: 13px;
+
+  line-height: 1.5;
+}
+
+
+/* ==========================================================
+   RESPONSIVE
+   ========================================================== */
+
+@media (max-width: 1050px) {
+
+  .exam-content {
+
+    grid-template-columns: 1fr;
+
+  }
+
+  .proctoring-section {
+
+    order: -1;
+
+  }
+
+}
+
+
+@media (max-width: 650px) {
+
+  .exam-header {
+
+    padding: 0 15px;
+
+  }
+
+  .exam-content {
+
+    padding: 15px;
+
+  }
+
+  .question-card,
+  .verification-card {
+
+    padding: 20px;
+
+  }
+
+  .proctor-log {
+
+    grid-template-columns:
+      60px
+      25px
+      1fr;
+
+  }
+
+  .log-details {
+
+    align-items: flex-start;
+
+    flex-direction: column;
+
+  }
+
 }
